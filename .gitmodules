@@ -1,0 +1,3 @@
+[submodule "deps/heist"]
+	path = deps/heist
+	url = https://github.com/snapframework/heist
