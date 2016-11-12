@@ -1,3 +1,6 @@
 [submodule "deps/heist"]
 	path = deps/heist
 	url = https://github.com/snapframework/heist
+[submodule "deps/xmlhtml"]
+	path = deps/xmlhtml
+	url = https://github.com/snapframework/xmlhtml

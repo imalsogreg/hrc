@@ -7,6 +7,7 @@ let
 in
 reflex-platform.ghc.override {
   overrides = self: super: { 
-     heist    = dontCheck (self.callPackage (cabal2nixResult ../deps/heist){});
+     heist    = dontCheck (self.callPackage (cabal2nixResult deps/heist){});
+     xmlhtml  = dontCheck (self.callPackage (cabal2nixResult deps/xmlhtml){});
   };
 }

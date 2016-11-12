@@ -1,9 +1,14 @@
 {-# language OverloadedStrings #-}
 {-# language GADTs  #-}
 {-# language ScopedTypeVariables #-}
+{-# language TemplateHaskell #-}
+{-# language RankNTypes #-}
 
 module Reflex.Heist where
 
+import Control.Applicative (liftA2)
+import Data.Foldable (foldl')
+import Control.Lens
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BSL
@@ -43,24 +48,37 @@ bsGetXML = bsGetDocWith X.parseXML
 
 type ParserFun = String -> BS.ByteString -> Either String X.Document
 
-data HeistDynamicConfig t = HDC
-  { _hdcAddTemplate :: Event t (T.Text, H.DocumentFile)
+data HeistDynamicConfig t n = HDC
+  { _hdcInitialConfig :: H.HeistConfig n
+  , _hdcModifyConfig  :: Event t (H.HeistConfig n -> H.HeistConfig n)
+  , _hdcAddTemplate :: Event t (T.Text, H.DocumentFile)
   }
 
+makeLenses ''HeistDynamicConfig
+
 data HeistDynamic t n = HeistDynamic
-  { _hdHeistState     :: Dynamic t (H.HeistState n)
+  { _hdHeistState     :: Dynamic t (Either [String] (H.HeistState n))
   , _hdRenderTemplate :: Dynamic t (M.Map T.Text (T.Text, H.MIMEType))
   , _hdErrors         :: Event t T.Text
   }
 
-heistDynamic :: MonadWidget t m => HeistDynamicConfig t -> m (HeistDynamic t m)
+makeLenses ''HeistDynamic
+
+heistDynamic :: forall t m.MonadWidget t m => HeistDynamicConfig t m -> m (HeistDynamic t m)
 heistDynamic cfg = do
 
-  Right hState0 <- runEitherT . liftIO $ H.initHeist emptyHeistConfig
+  let conf0      = cfg ^. hdcInitialConfig
+      addT (n,d) = HI.addTemplate
+                   (T.encodeUtf8 n) ((X.docContent . H.dfDoc) d) Nothing
 
-  -- let templateAdditions = ffor (_hdcAddTemplate cfg) $ \(dp, df) s0 ->
-  --       return (HI.addTemplate (T.encodeUtf8 df) (bsGetDoc dp df) Nothing s0)
+  hConfig <- foldDyn ($) conf0 (cfg ^. hdcModifyConfig)
+  hDocs   <- foldDyn (:) mempty (cfg ^. hdcAddTemplate)
+  hState0 <- liftIO $ H.initHeist conf0
 
-  -- hState <- foldDyn ($) emptyConfig templateAdditions
+  -- Reinitialize the heist state every time HeistConfig changes or a document is added
+  -- This is inefficient
+  dState  <- performEvent $ ffor (updated $ liftA2 (,) hConfig hDocs) $ \(conf, docs) ->
+    fmap (\goodState -> foldr (\(n,d) s -> addT (n,d) s) goodState docs) <$> liftIO (H.initHeist conf)
+  hState <- holdDyn hState0 dState
 
-  return $ HeistDynamic (constDyn hState0) undefined undefined
+  return $ HeistDynamic hState undefined undefined
