@@ -48,23 +48,23 @@ bsGetXML = bsGetDocWith X.parseXML
 
 type ParserFun = String -> BS.ByteString -> Either String X.Document
 
-data HeistDynamicConfig t n = HDC
-  { _hdcInitialConfig :: H.HeistConfig n
-  , _hdcModifyConfig  :: Event t (H.HeistConfig n -> H.HeistConfig n)
+data HeistDynamicConfig t = HDC
+  { _hdcInitialConfig :: H.HeistConfig IO
+  , _hdcModifyConfig  :: Event t (H.HeistConfig IO -> H.HeistConfig IO)
   , _hdcAddTemplate :: Event t (T.Text, H.DocumentFile)
   }
 
 makeLenses ''HeistDynamicConfig
 
-data HeistDynamic t n = HeistDynamic
-  { _hdHeistState     :: Dynamic t (Either [String] (H.HeistState n))
+data HeistDynamic t = HeistDynamic
+  { _hdHeistState     :: Dynamic t (Either [String] (H.HeistState IO))
   , _hdRenderTemplate :: Dynamic t (M.Map T.Text (T.Text, H.MIMEType))
   , _hdErrors         :: Event t T.Text
   }
 
 makeLenses ''HeistDynamic
 
-heistDynamic :: forall t m.MonadWidget t m => HeistDynamicConfig t m -> m (HeistDynamic t m)
+heistDynamic :: forall t m.MonadWidget t m => HeistDynamicConfig t -> m (HeistDynamic t)
 heistDynamic cfg = do
 
   let conf0      = cfg ^. hdcInitialConfig
