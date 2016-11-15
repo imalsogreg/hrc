@@ -90,13 +90,19 @@ heistDynamic (HDC cfg0 dCfg tpls0 dTmpls) = do
 
     return $ HeistDynamic hState hConfig hDocs
 
-processConfig :: H.HeistConfig IO -> M.Map Int TemplateCode -> IO (Either [String] (H.HeistState IO))
+processConfig
+    :: H.HeistConfig IO
+    -> M.Map Int TemplateCode
+    -> IO (Either [String] (H.HeistState IO))
 processConfig cfg ds = do
     s <- H.initHeist cfg
-    return $ flip addDocs ts <$> s
+    return $ HI.bindSplices mempty . flip addDocs ts <$> s
       where
         ts = catMaybes . M.elems $ M.map (hush . ingestTemplateCode) ds
-        addDoc :: (T.Text, H.DocumentFile) -> H.HeistState IO -> H.HeistState IO
+        addDoc
+            :: (T.Text, H.DocumentFile)
+            -> H.HeistState IO
+            -> H.HeistState IO
         addDoc (n,doc) = HI.addTemplate
                          (T.encodeUtf8 n)
                          ((X.docContent . H.dfDoc) doc)
