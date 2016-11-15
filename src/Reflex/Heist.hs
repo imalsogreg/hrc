@@ -110,14 +110,18 @@ hush :: Either e a -> Maybe a
 hush (Left _)  = Nothing
 hush (Right a) = Just a
 
+note :: e -> Maybe a -> Either e a
+note _ (Just x) = Right x
+note e _        = Left e
+
 -------------------------------------------------------------------------------
 -- Render a template to a string
-previewTemplate :: BS.ByteString -> H.HeistState IO -> IO String
+previewTemplate :: T.Text -> H.HeistState IO -> IO T.Text
 previewTemplate t s = do
-  r <- HI.renderTemplate s t
+  r <- HI.renderTemplate s (T.encodeUtf8 t)
   case r of
-    Nothing    -> return "Template not found"
-    Just (b,_) -> return (T.unpack . T.decodeUtf8 . BSL.toStrict . B.toLazyByteString $ b)
+    Nothing    -> return ("Template not found: " <> t)
+    Just (b,_) -> return (T.decodeUtf8 . BSL.toStrict . B.toLazyByteString $ b)
 
 
 -------------------------------------------------------------------------------

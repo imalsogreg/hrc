@@ -4,3 +4,6 @@
 [submodule "deps/xmlhtml"]
 	path = deps/xmlhtml
 	url = https://github.com/snapframework/xmlhtml
+[submodule "deps/reflex-dom-contrib"]
+	path = deps/reflex-dom-contrib
+	url = https://github.com/reflex-frp/reflex-dom-contrib
