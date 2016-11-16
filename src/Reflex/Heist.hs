@@ -40,6 +40,17 @@ data TemplateCode = TemplateCode
     } deriving (Eq, Show)
 makeLenses ''TemplateCode
 
+data UiSpliceWidget = UiSpliceText
+                    | UiSpliceDouble
+                    | UiSpliceDropdown [(T.Text,T.Text)]
+
+parseSpliceType :: T.Text -> Maybe UiSpliceWidget
+parseSpliceType t = case t of
+    "text"           -> Just UiSpliceText
+    "double"         -> Just UiSpliceDouble
+    "drink-dropdown" -> Just $ UiSpliceDropdown
+                               [("Latte","Latte"),("Frap","Fram")]
+
 
 -------------------------------------------------------------------------------
 -- | Heist widget inputs
@@ -52,6 +63,14 @@ data HeistDynamicConfig t = HDC
       -- ^ Baseline Heist configuration
     , _hdcModifyTemplates :: Event t (M.Map Int (Maybe TemplateCode))
       -- ^ Addition and deletion of TemplateCode items
+    , _hdcUiSplicePrefix :: T.Text
+      -- ^ Tags beginning with this prefix will generate ui splices
+    , _hdcUiSpliceTypeAttribute :: T.Text
+      -- ^ This attribute will be used to set a UI splice's type
+    , _hdcInitialUiSplices :: M.Map T.Text UiSpliceWidget
+      -- ^ Default splices beyond those named in the templates
+    , _hdcModifyUiSplices :: Event t (M.Map T.Text (Maybe UiSpliceWidget))
+      -- ^ Manual addition or removal of splices
     }
 makeLenses ''HeistDynamicConfig
 
@@ -66,6 +85,8 @@ data HeistDynamic t = HeistDynamic
       -- ^ HeistConfig, for examining loaded template info
     , _hdTemplates  :: Dynamic t (M.Map Int TemplateCode)
       -- ^ TemplateCode entries
+    , _hdDynamicSplices :: Dynamic t (M.Map T.Text [X.Node])
+      -- ^ Splice requirements generated from the templates
     }
 
 makeLenses ''HeistDynamic
@@ -77,7 +98,7 @@ heistDynamic
     :: forall t m.MonadWidget t m
     => HeistDynamicConfig t
     -> m (HeistDynamic t)
-heistDynamic (HDC cfg0 dCfg tpls0 dTmpls) = do
+heistDynamic (HDC cfg0 dCfg tpls0 dTmpls splPrf splAttr spl0 dSpl) = do
 
     hDocs <- foldDyn applyMap tpls0 dTmpls
 
@@ -88,6 +109,8 @@ heistDynamic (HDC cfg0 dCfg tpls0 dTmpls) = do
         liftIO . uncurry processConfig
     hState <- holdDyn hState0 dState
 
+    let dynSplices = flatMap (flatMap (collectWidgetNeeds splPrf splAttr)) . map (hush . ingestTemplateCode) <$> hDocs
+            
     return $ HeistDynamic hState hConfig hDocs
 
 processConfig
@@ -111,6 +134,18 @@ processConfig cfg ds = do
         addDocs :: H.HeistState IO -> [(T.Text, H.DocumentFile)] -> H.HeistState IO
         addDocs s ds = foldl' (flip addDoc) s ds
 
+collectWidgetNeeds
+    :: T.Text
+    -> T.Text
+    -> X.Node
+    -> [(T.Text, Maybe UiSpliceWidget)]
+collectWidgetNeeds tagPrefix attrPrefix (Element t atrs chlds) =
+    let thisType   = safeHead . catMaybes . fmap readMaybe .
+                     filter (attrPrefix `isPrefixOf`) $ attrs
+        thisWidget = if tagPrefix `T.isPrefixOf` t
+                     then (t:)
+                     else id
+    in  thisWidget $ flatMap (collectWidgetNeeds tagPrefix attrPrefix) children
 
 hush :: Either e a -> Maybe a
 hush (Left _)  = Nothing

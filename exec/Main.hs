@@ -41,12 +41,13 @@ main = mainWidget run
 -------------------------------------------------------------------------------
 run :: forall t m .MonadWidget t m => m ()
 run = mdo
+    text "3"
     pb <- getPostBuild
     -- ns <- textInput def
     -- let myDoc = ("base" :: T.Text,) <$> hush (bsGetDoc Nothing testBase)
     hd  <- heistDynamic
            (HDC (H.emptyHeistConfig
-                 & H.hcInterpretedSplices .~ someSplices
+                 & H.hcInterpretedSplices .~ (someSplices <> H.defaultInterpretedSplices)
                  & H.hcNamespace .~ "")
                never
                -- ((H.hcNamespace .~) <$> updated (value ns))
@@ -93,7 +94,7 @@ templateList dk hd = do
         hs        = hd ^. hdHeistState
     l <- selectViewListWithKey (fromMaybe (-1) <$> dk) ts $ \k v isSel -> do
 
-        (listing,nn) <- elAttr' "div" listingItemAttrs $ do
+        (listing,nn) <- elDynAttr' "div" (listingItemAttrs <$> isSel) $ do
 
             let pOk = parseOk <$> (hd ^. hdHeistState) <*> v
                 parseInd = indAttrs <$> pOk
@@ -232,13 +233,16 @@ iframeAttrs :: M.Map T.Text T.Text
 iframeAttrs   = "width" =: "400px" <> "height" =: "600px;"
 
 indAttrs :: Bool -> M.Map T.Text T.Text
-indAttrs b = let bgc :: T.Text = bool "white" "rgba(0,255,0,0.5);" b
-             in  "style" =: ("width: 10px; height: 10px; border-radius:20px; border: 2px solid black; background-color: " <> bgc <> ";")
+indAttrs b = let bgc = bool "rgba(255,0,0,0.5)" "rgba(0,255,0,0.5);" b
+                 shc = bool "rgba(255,0,0,1)" "rgba(0,255,0,1);" b
+             in  "style" =: ("margin-right: 10px; width: 8px; height: 8px; border-radius:8px; border: 1px solid white; background-color: " <> bgc <> "; box-shadow: " <> shc <> ";")
 
 parseOk :: Either [String] (H.HeistState IO) -> TemplateCode -> Bool
 parseOk (Left _) _   = False
 parseOk (Right hs) t = T.encodeUtf8 (_tcName t) `elem` (head
     <$> H.templateNames hs)
 
-listingItemAttrs :: M.Map T.Text T.Text
-listingItemAttrs = "style" =: "display:flex; align-items:center;"
+listingItemAttrs :: Bool -> M.Map T.Text T.Text
+listingItemAttrs sel =
+    let brd = bool "" " border-right: 3px solid black;" sel
+    in  "style" =: ("display:flex; align-items:center; background-color: rgba(0,0,0,0.1); padding: 10px;" <> brd)
