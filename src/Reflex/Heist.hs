@@ -45,14 +45,20 @@ makeLenses ''TemplateCode
 data UiSpliceWidget = UiSpliceText
                     | UiSpliceDouble
                     | UiSpliceDropdown [(T.Text,T.Text)]
-                    deriving (Show)
+                    deriving (Eq, Show)
 
 parseSpliceType :: T.Text -> Maybe UiSpliceWidget
 parseSpliceType t = case t of
     "text"           -> Just UiSpliceText
     "double"         -> Just UiSpliceDouble
     "drink-dropdown" -> Just $ UiSpliceDropdown
-                               [("Latte","Latte"),("Frap","Fram")]
+                               [("Tall Latte", "Latte-12")
+                               ,("Grande Latte", "Latte-16")
+                               ,("Venti Latte", "Latte-20")
+                               ,("Tall Frappucino", "Frap-12")
+                               ,("Grande Frappucino", "Frap-16")
+                               ,("Venti Frappucino", "Frap-20")
+                               ]
     _                -> Nothing
 
 
@@ -67,6 +73,8 @@ data HeistDynamicConfig t = HDC
       -- ^ Baseline Heist configuration
     , _hdcModifyTemplates       :: Event t (M.Map Int (Maybe TemplateCode))
       -- ^ Addition and deletion of TemplateCode items
+    , _hdcExtraInterpretedSplices :: Dynamic t (H.Splices (HI.Splice IO))
+      -- ^ Additional interpreted splices
     , _hdcUiSplicePrefix        :: T.Text
       -- ^ Tags beginning with this prefix will generate ui splices
     , _hdcUiSpliceTypeAttribute :: T.Text
@@ -89,7 +97,7 @@ data HeistDynamic t = HeistDynamic
       -- ^ HeistConfig, for examining loaded template info
     , _hdTemplates      :: Dynamic t (M.Map Int TemplateCode)
       -- ^ TemplateCode entries
-    , _hdDynamicSplices :: Dynamic t (M.Map T.Text [X.Node])
+    , _hdDynamicSplices :: Dynamic t (M.Map T.Text UiSpliceWidget)
       -- ^ Splice requirements generated from the templates
     }
 
@@ -102,7 +110,7 @@ heistDynamic
     :: forall t m.MonadWidget t m
     => HeistDynamicConfig t
     -> m (HeistDynamic t)
-heistDynamic (HDC cfg0 dCfg tpls0 dTmpls splPrf splAttr spl0 dSpl) = do
+heistDynamic (HDC cfg0 dCfg tpls0 dTmpls spls splPrf splAttr spl0 dSpl) = do
 
     hDocs <- foldDyn applyMap tpls0 dTmpls
 
@@ -111,7 +119,8 @@ heistDynamic (HDC cfg0 dCfg tpls0 dTmpls splPrf splAttr spl0 dSpl) = do
     hState0 <- liftIO $ processConfig cfg0 tpls0
     dState <- performEvent $ ffor (updated $ (,) <$> hConfig <*> hDocs) $
         liftIO . uncurry processConfig
-    hState <- holdDyn hState0 dState
+    hStateBare <- holdDyn hState0 dState
+    let hState = liftA2 (fmap . HI.bindSplices) spls hStateBare
 
     let dynSplices :: Dynamic t (M.Map T.Text UiSpliceWidget)
         dynSplices = mconcat . fmap (mconcat .
@@ -120,8 +129,7 @@ heistDynamic (HDC cfg0 dCfg tpls0 dTmpls splPrf splAttr spl0 dSpl) = do
                      fmap (maybe mempty (X.docContent . H.dfDoc . snd) . hush .
                            ingestTemplateCode) . M.elems <$> hDocs
 
-    display dynSplices
-    return $ HeistDynamic hState hConfig hDocs undefined
+    return $ HeistDynamic hState hConfig hDocs dynSplices
 
 
 processConfig
@@ -142,7 +150,10 @@ processConfig cfg ds = do
                          ((X.docContent . H.dfDoc) doc)
                          (H.dfFile doc)
 
-        addDocs :: H.HeistState IO -> [(T.Text, H.DocumentFile)] -> H.HeistState IO
+        addDocs
+            :: H.HeistState IO
+            -> [(T.Text, H.DocumentFile)]
+            -> H.HeistState IO
         addDocs s ds = foldl' (flip addDoc) s ds
 
 pickWidget :: [(T.Text, Maybe UiSpliceWidget)] -> M.Map T.Text UiSpliceWidget
@@ -160,7 +171,8 @@ collectWidgetNeeds tagPrefix attrPrefix (X.Element t atrs chlds) =
         thisWidget = if tagPrefix `T.isPrefixOf` t
                      then ((t, thisType):)
                      else id
-    in  thisWidget . mconcat $ map (collectWidgetNeeds tagPrefix attrPrefix) chlds
+    in  thisWidget . mconcat $ map (collectWidgetNeeds tagPrefix attrPrefix)
+                               chlds
 collectWidgetNeeds _ _ _ = []
 
 hush :: Either e a -> Maybe a
