@@ -53,6 +53,10 @@ run = mdo
                -- ((H.hcNamespace .~) <$> updated (value ns))
                templates0
                ups
+               "takt"
+               "splicetype"
+               mempty
+               never
            )
     -- divClass "" $ display (fmap H.templateNames <$> (hd ^. hdHeistState))
     -- performEvent_ $ ffor (updated $ hd ^. hdHeistState) $
@@ -158,7 +162,7 @@ templatePreview
     => Dynamic t (Maybe Int)
     -> HeistDynamic t
     -> m ()
-templatePreview dk (HeistDynamic hs _ hts) = do
+templatePreview dk (HeistDynamic hs _ hts sps) = do
     pb <- getPostBuild
     let d   = (,,) <$> dk <*> hts <*> hs
         runPreview :: (Maybe Int, M.Map Int TemplateCode, Either [String] (H.HeistState IO)) -> IO T.Text

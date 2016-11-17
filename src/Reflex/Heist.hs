@@ -8,8 +8,9 @@
 
 module Reflex.Heist where
 
-import           Control.Applicative    (liftA2)
+import           Control.Applicative    (liftA2, (<|>))
 import           Control.Lens
+import           Control.Monad          (join)
 import           Control.Monad.IO.Class (liftIO)
 import qualified Data.Binary.Builder    as B
 import qualified Data.ByteString        as BS
@@ -18,13 +19,14 @@ import           Data.Either            (either)
 import           Data.Foldable          (foldl')
 import qualified Data.Map               as M
 import qualified Data.Map.Syntax        as M
-import           Data.Maybe             (catMaybes, maybe)
+import           Data.Maybe             (catMaybes, fromMaybe, maybe)
 import           Data.Monoid
 import qualified Data.Text              as T
 import qualified Data.Text.Encoding     as T
 import qualified Heist                  as H
 import qualified Heist.Interpreted      as HI
 import           Reflex.Dom
+import           Text.Read              (readMaybe)
 import qualified Text.XmlHtml           as X
 
 
@@ -43,6 +45,7 @@ makeLenses ''TemplateCode
 data UiSpliceWidget = UiSpliceText
                     | UiSpliceDouble
                     | UiSpliceDropdown [(T.Text,T.Text)]
+                    deriving (Show)
 
 parseSpliceType :: T.Text -> Maybe UiSpliceWidget
 parseSpliceType t = case t of
@@ -50,26 +53,27 @@ parseSpliceType t = case t of
     "double"         -> Just UiSpliceDouble
     "drink-dropdown" -> Just $ UiSpliceDropdown
                                [("Latte","Latte"),("Frap","Fram")]
+    _                -> Nothing
 
 
 -------------------------------------------------------------------------------
 -- | Heist widget inputs
 data HeistDynamicConfig t = HDC
-    { _hdcInitialConfig   :: H.HeistConfig IO
+    { _hdcInitialConfig         :: H.HeistConfig IO
       -- ^ Initial HeistConfig
-    , _hdcModifyConfig    :: Event t (H.HeistConfig IO -> H.HeistConfig IO)
+    , _hdcModifyConfig          :: Event t (H.HeistConfig IO -> H.HeistConfig IO)
       -- ^ Other modifications to the HeistConfig
-    , _hdcInitialTemplates :: M.Map Int TemplateCode
+    , _hdcInitialTemplates      :: M.Map Int TemplateCode
       -- ^ Baseline Heist configuration
-    , _hdcModifyTemplates :: Event t (M.Map Int (Maybe TemplateCode))
+    , _hdcModifyTemplates       :: Event t (M.Map Int (Maybe TemplateCode))
       -- ^ Addition and deletion of TemplateCode items
-    , _hdcUiSplicePrefix :: T.Text
+    , _hdcUiSplicePrefix        :: T.Text
       -- ^ Tags beginning with this prefix will generate ui splices
     , _hdcUiSpliceTypeAttribute :: T.Text
       -- ^ This attribute will be used to set a UI splice's type
-    , _hdcInitialUiSplices :: M.Map T.Text UiSpliceWidget
+    , _hdcInitialUiSplices      :: M.Map T.Text UiSpliceWidget
       -- ^ Default splices beyond those named in the templates
-    , _hdcModifyUiSplices :: Event t (M.Map T.Text (Maybe UiSpliceWidget))
+    , _hdcModifyUiSplices       :: Event t (M.Map T.Text (Maybe UiSpliceWidget))
       -- ^ Manual addition or removal of splices
     }
 makeLenses ''HeistDynamicConfig
@@ -78,12 +82,12 @@ makeLenses ''HeistDynamicConfig
 -------------------------------------------------------------------------------
 -- | Heist widget state
 data HeistDynamic t = HeistDynamic
-    { _hdHeistState :: Dynamic t (Either [String] (H.HeistState IO))
+    { _hdHeistState     :: Dynamic t (Either [String] (H.HeistState IO))
       -- ^ HeistState, indicating successful template loading and allowing
       --   templates to be rendered
-    , _hdConfig     :: Dynamic t (H.HeistConfig IO)
+    , _hdConfig         :: Dynamic t (H.HeistConfig IO)
       -- ^ HeistConfig, for examining loaded template info
-    , _hdTemplates  :: Dynamic t (M.Map Int TemplateCode)
+    , _hdTemplates      :: Dynamic t (M.Map Int TemplateCode)
       -- ^ TemplateCode entries
     , _hdDynamicSplices :: Dynamic t (M.Map T.Text [X.Node])
       -- ^ Splice requirements generated from the templates
@@ -109,9 +113,16 @@ heistDynamic (HDC cfg0 dCfg tpls0 dTmpls splPrf splAttr spl0 dSpl) = do
         liftIO . uncurry processConfig
     hState <- holdDyn hState0 dState
 
-    let dynSplices = flatMap (flatMap (collectWidgetNeeds splPrf splAttr)) . map (hush . ingestTemplateCode) <$> hDocs
-            
-    return $ HeistDynamic hState hConfig hDocs
+    let dynSplices :: Dynamic t (M.Map T.Text UiSpliceWidget)
+        dynSplices = mconcat . fmap (mconcat .
+                                     fmap (pickWidget .
+                                           collectWidgetNeeds splPrf splAttr)) .
+                     fmap (maybe mempty (X.docContent . H.dfDoc . snd) . hush .
+                           ingestTemplateCode) . M.elems <$> hDocs
+
+    display dynSplices
+    return $ HeistDynamic hState hConfig hDocs undefined
+
 
 processConfig
     :: H.HeistConfig IO
@@ -134,18 +145,23 @@ processConfig cfg ds = do
         addDocs :: H.HeistState IO -> [(T.Text, H.DocumentFile)] -> H.HeistState IO
         addDocs s ds = foldl' (flip addDoc) s ds
 
+pickWidget :: [(T.Text, Maybe UiSpliceWidget)] -> M.Map T.Text UiSpliceWidget
+pickWidget = M.map (fromMaybe UiSpliceText) . M.fromListWith (<|>)
+
+-- TODO: Pass splice tag internals to splice widget
 collectWidgetNeeds
     :: T.Text
     -> T.Text
     -> X.Node
     -> [(T.Text, Maybe UiSpliceWidget)]
-collectWidgetNeeds tagPrefix attrPrefix (Element t atrs chlds) =
-    let thisType   = safeHead . catMaybes . fmap readMaybe .
-                     filter (attrPrefix `isPrefixOf`) $ attrs
+collectWidgetNeeds tagPrefix attrPrefix (X.Element t atrs chlds) =
+    let thisType   = safeHead . catMaybes . fmap (parseSpliceType  . snd) .
+                     filter ((attrPrefix `T.isPrefixOf`) . fst) $ atrs
         thisWidget = if tagPrefix `T.isPrefixOf` t
-                     then (t:)
+                     then ((t, thisType):)
                      else id
-    in  thisWidget $ flatMap (collectWidgetNeeds tagPrefix attrPrefix) children
+    in  thisWidget . mconcat $ map (collectWidgetNeeds tagPrefix attrPrefix) chlds
+collectWidgetNeeds _ _ _ = []
 
 hush :: Either e a -> Maybe a
 hush (Left _)  = Nothing
@@ -154,6 +170,10 @@ hush (Right a) = Just a
 note :: e -> Maybe a -> Either e a
 note _ (Just x) = Right x
 note e _        = Left e
+
+safeHead :: [a] -> Maybe a
+safeHead (x:xs) = Just x
+safeHead _ = Nothing
 
 -------------------------------------------------------------------------------
 -- Render a template to a string
