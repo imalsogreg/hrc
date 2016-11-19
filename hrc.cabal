@@ -16,7 +16,7 @@ extra-source-files:  ChangeLog.md
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Reflex.Heist
+  exposed-modules:     Reflex.Heist, Reflex.Markup
   -- other-modules:       
   -- other-extensions:    
   build-depends:       base >=4.8 && <4.10
