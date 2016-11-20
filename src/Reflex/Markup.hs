@@ -9,16 +9,17 @@
 
 module Reflex.Markup where
 
-import           Control.Lens       (makeLenses, (.~), (^.))
-import           Data.Bool          (bool)
-import qualified Data.Map           as M
-import           Data.Monoid        ((<>))
-import qualified Data.Text          as T
-import qualified Data.Text.Encoding as T
-import qualified Heist              as H
-import qualified Heist.Interpreted  as HI
+import           Control.Lens          (makeLenses, (.~), (^.))
+import           Data.Bool             (bool)
+import qualified Data.ByteString.Char8 as BS
+import qualified Data.Map              as M
+import           Data.Monoid           ((<>))
+import qualified Data.Text             as T
+import qualified Data.Text.Encoding    as T
+import qualified Heist                 as H
+import qualified Heist.Interpreted     as HI
 import           Reflex.Dom
-import qualified Text.XmlHtml       as X
+import qualified Text.XmlHtml          as X
 
 
 -------------------------------------------------------------------------------
@@ -68,15 +69,25 @@ markupList (MarkupListConfig t0 dT mkChild) = do
 -- TODO: Replace with something nicer. ACE?
 markupEditor
     :: MonadWidget t m
-    -> Dynamic t MarkupCode
-    -> m (Event t (Either T.Text MarkupCode))
+    => Dynamic t MarkupCode
+--    -> m (Event t (T.Text, Either T.Text H.DocumentFile))
+    -> m (Event t MarkupCode)
 markupEditor code = do
     pb <- getPostBuild
-    templateName <- holdDyn "" $ _mcName <$> leftmost [tag code pb, updated pb]
-    let extUpdates = ffilter leftmost [attach code pb, updated pb]
-    ta <- textArea $ def & textAreaConfig_setValue .~ (_tcCode <$> extUpdates)
+    let name  = uniqDyn (_mcName <$> code)
+        dCode = _mcCode <$> leftmost [tag (current code) pb
+                                     ,tagPromptlyDyn code (updated name)]
+    ta <- textArea $ def & textAreaConfig_setValue .~ dCode
                          & textAreaConfig_attributes .~ constDyn codeareaAttrs
     ups <- debounce 0.5 (updated $ value ta)
+    return $ attachWith (flip (mcCode .~)) (current code) ups
+
+    -- return $ ffor (attachDyn code ups) $ \(mc, t) ->
+    --   let tName = _mcName mc
+    --       tDoc  = either (Left . T.pack) Right
+    --               (bsGetDoc (Just $ _mcUrlDir mc) (T.encodeUtf8 t))
+    --   in (tName, tDoc)
+
 
 -------------------------------------------------------------------------------
 markupListAtr :: Bool -> M.Map T.Text T.Text
@@ -86,3 +97,26 @@ markupListAtr sel =
 
 codeareaAttrs :: M.Map T.Text T.Text
 codeareaAttrs = "style" =: "width:400px; height:600px;"
+
+-- | Parse a bytestring into XML or HTML nodes
+bsGetDocWith
+    :: ParserFun
+    -> Maybe T.Text -- ^ Document URL (for rec)
+    -> BS.ByteString -- ^ Document contentts
+    -> Either String H.DocumentFile
+bsGetDocWith parser fUrl bs =
+    either (\e -> Left $ errName <> " " <> e)
+    (Right . flip H.DocumentFile (T.unpack <$> fUrl))
+    (parser errName bs)
+  where errName = maybe "[unknown filename]" T.unpack fUrl
+
+-- | Parse a bytestring into HTML
+bsGetDoc :: Maybe T.Text -> BS.ByteString -> Either String H.DocumentFile
+bsGetDoc = bsGetDocWith X.parseHTML
+
+-- | Parse a bytestring into XML
+bsGetXML :: Maybe T.Text -> BS.ByteString -> Either String H.DocumentFile
+bsGetXML = bsGetDocWith X.parseXML
+
+type ParserFun = String -> BS.ByteString -> Either String X.Document
+

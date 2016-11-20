@@ -16,7 +16,10 @@ extra-source-files:  ChangeLog.md
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Reflex.Heist, Reflex.Markup
+  exposed-modules:     Reflex.DynSplice
+                     , Reflex.Heist
+                     , Reflex.Markup
+                     , Reflex.Render
   -- other-modules:       
   -- other-extensions:    
   build-depends:       base >=4.8 && <4.10
