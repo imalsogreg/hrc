@@ -79,33 +79,24 @@ pinAttrs = (("style" =:) . ("background-color:" <>)) . bool "white" "green"
 heistState
   :: MonadWidget t m
   => H.HeistConfig IO
-  -> Dynamic t (M.Map Int MarkupCode)
+  -- -> Dynamic t (M.Map Int MarkupCode)
+  -> Dynamic t [(T.Text, H.DocumentFile)]
   -> m (Dynamic t (Either [T.Text] (H.HeistState IO)))
-heistState cfg markups = do
+heistState cfg docs = do
   pb <- getPostBuild
-  let cfgUpdates = leftmost [tagPromptlyDyn markups pb, updated markups]
+  let cfgUpdates = leftmost [tagPromptlyDyn docs pb, updated docs]
       bimap f g  = either (Left . f) (Right . g)
   dHs <- performEvent $ ffor cfgUpdates $ \ms ->
-    let docs = catMaybes . fmap hush . M.elems $ M.map ingestMarkupCode ms
+    let -- docs = snd $ parseMarkups ms
         addDocs s = foldr (\(tName,tDoc) hs ->
                              HI.addTemplate (T.encodeUtf8 tName)
                                             (X.docContent $ H.dfDoc tDoc)
                                             (H.dfFile tDoc) hs
-                          ) s docs
+                          ) s ms -- docs
     in  liftIO $ fmap addDocs <$> (H.initHeist cfg)
   holdDyn (Left ["Not initialized"]) (bimap (fmap T.pack) id <$> dHs)
 
 
--------------------------------------------------------------------------------
--- Load a TemplateCode as a Heist document
-ingestMarkupCode
-    :: MarkupCode
-    -> Either String (T.Text, H.DocumentFile)
-ingestMarkupCode mc = (tName,) <$> bsGetDoc fName html
-  where
-    fName = Just $ mc ^. mcUrlDir
-    html  = T.encodeUtf8 $ mc ^. mcCode
-    tName = mc ^. mcName
 
 
 hush :: Either e a -> Maybe a

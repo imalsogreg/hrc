@@ -36,15 +36,23 @@ import qualified Reflex.Dom.Contrib.Widgets.EditInPlace as EIP
 import           Reflex.Heist
 import           Text.Read                              (readMaybe)
 import qualified Text.XmlHtml                           as X
+import           Reflex.Markup
+import qualified Reflex.Markup as RM
+import qualified Reflex.FullWidget as FW
 
 -------------------------------------------------------------------------------
 main :: IO ()
 main = mainWidget run
 
+run :: forall t m. MonadWidget t m => m ()
+run = do
+    text "1"
+    FW.heistWidget $ FW.HeistWidgetConfig templates1 never
+    return ()
 
 -------------------------------------------------------------------------------
-run :: forall t m .MonadWidget t m => m ()
-run = mdo
+run' :: forall t m .MonadWidget t m => m ()
+run' = mdo
     text "6"
     pb <- getPostBuild
     hd  <- heistDynamic
@@ -200,7 +208,7 @@ templateCode dk s = do
             zipDynWith (\k ts -> maybe "" _tcCode (k >>= flip M.lookup ts)) dk dts
         textUpdates = leftmost [updated codeText, tag (current codeText) pb]
     ta <- textArea $ def & textAreaConfig_setValue .~ textUpdates
-                         & textAreaConfig_attributes .~ constDyn codeareaAttrs
+                         & textAreaConfig_attributes .~ constDyn Main.codeareaAttrs
     tbUpdates <- debounce 0.5 . updated $ value ta -- Debounce is critical
     -- upButton <- button "Update"
     -- let tbUpdates = tag (current $ value ta) upButton
@@ -239,6 +247,15 @@ templates0 =
        1 =: TemplateCode "block" "src"  (T.decodeUtf8 testBase)
     <> 2 =: TemplateCode "test1" "src" (T.decodeUtf8 testTemplate1)
     <> 3 =: TemplateCode "fancydrink" "src" (T.decodeUtf8 testTemplate2)
+
+templates1 :: M.Map Int MarkupCode
+templates1 =
+       1 =: MarkupCode "block" "src"  (T.decodeUtf8 testBase)
+    <> 2 =: MarkupCode "test1" "src" (T.decodeUtf8 testTemplate1)
+    <> 3 =: MarkupCode "fancydrink" "src" (T.decodeUtf8 testTemplate2)
+
+templates2 :: M.Map Int MarkupCode
+templates2 = 1 =: MarkupCode "test" "src" "<h1>Hi</h1>"
 
 testBase :: BS.ByteString
 testBase = [s|

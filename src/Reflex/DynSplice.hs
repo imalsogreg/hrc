@@ -14,6 +14,7 @@ import           Control.Applicative    (Alternative, liftA2, (<|>))
 import           Control.Lens
 import           Control.Monad          (join)
 import           Control.Monad.IO.Class (liftIO)
+import           Data.Bifunctor         (second)
 import qualified Data.Binary.Builder    as B
 import           Data.Bool              (bool)
 import qualified Data.ByteString        as BS
@@ -46,10 +47,6 @@ instance Monoid UiSpliceHole where
   x               `mappend` _ = x
 
 
--------------------------------------------------------------------------------
--- Utility function for combining the results of multiple splice-hole sets
-concatUiHoles :: [M.Map T.Text UiSpliceHole] -> M.Map T.Text UiSpliceHole
-concatUiHoles = M.unionsWith (<>)
 
 
 -------------------------------------------------------------------------------
@@ -65,9 +62,11 @@ collectHoles parseTag ts =
     accumTemplate :: H.Template -> M.Map T.Text UiSpliceHole
     accumTemplate t = concatUiHoles (spliceHoles <$> t)
 
-
     addHole :: UiSpliceHole -> UiSpliceHole -> UiSpliceHole
     addHole oldV newV = oldV <> newV
+
+    concatUiHoles :: [M.Map T.Text UiSpliceHole] -> M.Map T.Text UiSpliceHole
+    concatUiHoles = M.unionsWith (<>)
 
     spliceHoles :: X.Node -> M.Map T.Text UiSpliceHole
     spliceHoles (X.TextNode t) = mempty
@@ -80,14 +79,38 @@ collectHoles parseTag ts =
 
 
 -------------------------------------------------------------------------------
+-- Default widget for filling all splice holes
+spliceWidgets
+    :: forall t m. MonadWidget t m
+    => Dynamic t (M.Map T.Text UiSpliceHole)
+    -> m (Dynamic t (H.Splices (HI.Splice IO)))
+spliceWidgets spliceHoles = do
+    pb <- getPostBuild
+    let holeUpdates = M.map Just <$> leftmost [updated spliceHoles
+                                              ,tag (current spliceHoles) pb]
+        errSpl k v = errorSplice k
+    wUpdates  <- listWithKeyShallowDiff mempty holeUpdates
+        (\k v dV -> do
+                holeType <- uniqDyn <$> holdDyn v dV
+                ups <- dyn (ffor holeType $ \t ->
+                                   dynSpliceWidget (errSpl k t) t)
+                return . join =<< holdDyn (constDyn $ Left $ errSpl k v) ups
+        )
+
+    return $
+        M.foldl' (>>) mempty . M.mapWithKey (M.##) . M.map (either id id) <$>
+        joinDynThroughMap wUpdates
+
+
+-------------------------------------------------------------------------------
 -- Widget for building a Splice from a SpliceHole
 dynSpliceWidget
   :: forall t m.MonadWidget t m
-  => UiSpliceHole
-  -> HI.Splice IO
+  => HI.Splice IO
+  -> UiSpliceHole
   -- ^ Splice to run on error
   -> m (Dynamic t (Either (HI.Splice IO) (HI.Splice IO)))
-dynSpliceWidget sw errSplice = case sw of
+dynSpliceWidget errSplice sw = case sw of
   UiSpliceText   -> uiSpliceRead Just (T.pack)
   UiSpliceDouble -> uiSpliceRead (readMaybe :: String -> Maybe Double)
                                  (T.pack . show)
@@ -107,3 +130,19 @@ dynSpliceWidget sw errSplice = case sw of
         case p (T.unpack t) of
           Nothing -> Left  errSplice
           Just v  -> Right $ return [X.TextNode (s v)]
+
+
+
+spliceHoleParser :: T.Text -> [(T.Text,T.Text)] -> Maybe (T.Text, UiSpliceHole)
+spliceHoleParser t attrs = case T.stripPrefix "splice:" t of
+    Nothing   -> Nothing
+    Just name -> case lookup "splicetype" attrs of
+        Just "text"     -> Just (name, UiSpliceText)
+        Just "double"   -> Just (name, UiSpliceDouble)
+        Just "dropdown" -> Just (name, maybe UiSpliceUntyped (UiSpliceDropdown . parseOpts) (lookup "options" attrs ))
+        Nothing -> Just (name, UiSpliceUntyped)
+  where parseOpts = fmap (second (T.drop 1) . T.breakOn ",") . T.splitOn ";"
+
+errorSplice :: T.Text -> HI.Splice IO
+errorSplice t = return $ [X.Element "span" [("class","error-splice")
+                                           ,("style","font-weight:bold;")] [X.TextNode t]]

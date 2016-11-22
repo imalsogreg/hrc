@@ -17,6 +17,7 @@ cabal-version:       >=1.10
 
 library
   exposed-modules:     Reflex.DynSplice
+                     , Reflex.FullWidget
                      , Reflex.Heist
                      , Reflex.Markup
                      , Reflex.Render

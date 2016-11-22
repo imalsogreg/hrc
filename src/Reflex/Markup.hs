@@ -12,6 +12,7 @@ module Reflex.Markup where
 import           Control.Lens          (makeLenses, (.~), (^.))
 import           Data.Bool             (bool)
 import qualified Data.ByteString.Char8 as BS
+import           Data.Either (partitionEithers)
 import qualified Data.Map              as M
 import           Data.Monoid           ((<>))
 import qualified Data.Text             as T
@@ -49,6 +50,8 @@ data MarkupList t = MarkupList
     , _markupList_Docs :: Dynamic t (M.Map Int MarkupCode)
     }
 
+defDrawEntry :: MonadWidget t m => Int -> Dynamic t MarkupCode -> m ()
+defDrawEntry k v = dynText (_mcName <$> v)
 
 -------------------------------------------------------------------------------
 markupList
@@ -57,7 +60,7 @@ markupList
     -> m (MarkupList t)
 markupList (MarkupListConfig t0 dT mkChild) = do
     markups <- foldDyn applyMap t0 dT
-    rec sel  <- holdDyn 0 dSel
+    rec sel  <- holdDyn 1 dSel
         dSel <- selectViewListWithKey_ sel markups $ \k v isSel -> do
             item <- fmap fst $ elDynAttr' "div" (markupListAtr <$> isSel) $
                 mkChild k v
@@ -69,24 +72,34 @@ markupList (MarkupListConfig t0 dT mkChild) = do
 -- TODO: Replace with something nicer. ACE?
 markupEditor
     :: MonadWidget t m
-    => Dynamic t MarkupCode
+    => Dynamic t (Maybe MarkupCode)
 --    -> m (Event t (T.Text, Either T.Text H.DocumentFile))
     -> m (Event t MarkupCode)
 markupEditor code = do
     pb <- getPostBuild
-    let name  = uniqDyn (_mcName <$> code)
-        dCode = _mcCode <$> leftmost [tag (current code) pb
-                                     ,tagPromptlyDyn code (updated name)]
+    let name  = uniqDyn (fmap _mcName <$> code)
+        dCode = maybe "" _mcCode <$>
+            leftmost [tag (current code) pb
+                     ,tagPromptlyDyn code (updated name)]
     ta <- textArea $ def & textAreaConfig_setValue .~ dCode
                          & textAreaConfig_attributes .~ constDyn codeareaAttrs
-    ups <- debounce 0.5 (updated $ value ta)
-    return $ attachWith (flip (mcCode .~)) (current code) ups
+    ups <- debounce 0.1 (updated $ value ta)
+    return $ attachWithMaybe (\m m' -> fmap (mcCode .~ m') m)
+                             (current code) ups
 
-    -- return $ ffor (attachDyn code ups) $ \(mc, t) ->
-    --   let tName = _mcName mc
-    --       tDoc  = either (Left . T.pack) Right
-    --               (bsGetDoc (Just $ _mcUrlDir mc) (T.encodeUtf8 t))
-    --   in (tName, tDoc)
+parseMarkups :: M.Map Int MarkupCode -> ([String], [(T.Text, H.DocumentFile)])
+parseMarkups = partitionEithers . M.elems . M.map ingestMarkupCode
+
+-------------------------------------------------------------------------------
+-- Load a TemplateCode as a Heist document
+ingestMarkupCode
+    :: MarkupCode
+    -> Either String (T.Text, H.DocumentFile)
+ingestMarkupCode mc = (tName,) <$> bsGetDoc fName html
+  where
+    fName = Just $ mc ^. mcUrlDir
+    html  = T.encodeUtf8 $ mc ^. mcCode
+    tName = mc ^. mcName
 
 
 -------------------------------------------------------------------------------
