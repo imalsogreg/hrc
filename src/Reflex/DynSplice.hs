@@ -119,6 +119,7 @@ dynSpliceWidget errSplice sw = case sw of
     (x:_) -> do
       dd <- value <$> dropdown (fst x) (constDyn $ M.fromList xs) def
       return $ ffor dd $ \d -> Right (return $ [X.TextNode d])
+  other -> return $ constDyn $ Right $ errorSplice (T.pack $ show other)
   where
     uiSpliceRead
       :: (String -> Maybe b)
@@ -137,10 +138,10 @@ spliceHoleParser :: T.Text -> [(T.Text,T.Text)] -> Maybe (T.Text, UiSpliceHole)
 spliceHoleParser t attrs = case T.stripPrefix "splice:" t of
     Nothing   -> Nothing
     Just name -> case lookup "splicetype" attrs of
-        Just "text"     -> Just (name, UiSpliceText)
-        Just "double"   -> Just (name, UiSpliceDouble)
-        Just "dropdown" -> Just (name, maybe UiSpliceUntyped (UiSpliceDropdown . parseOpts) (lookup "options" attrs ))
-        Nothing -> Just (name, UiSpliceUntyped)
+        Just "text"     -> Just (t, UiSpliceText)
+        Just "double"   -> Just (t, UiSpliceDouble)
+        Just "dropdown" -> Just (t, maybe UiSpliceUntyped (UiSpliceDropdown . parseOpts) (lookup "options" attrs ))
+        _ -> Just (t, UiSpliceUntyped)
   where parseOpts = fmap (second (T.drop 1) . T.breakOn ",") . T.splitOn ";"
 
 errorSplice :: T.Text -> HI.Splice IO

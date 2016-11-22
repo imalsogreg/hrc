@@ -40,14 +40,13 @@ preview
   => Dynamic t T.Text
   -> Dynamic t (Either [T.Text] (H.HeistState IO))
   -> Dynamic t (M.Map Int MarkupCode)
-  -> Dynamic t (H.Splices (HI.Splice IO))
   -> m ()
-preview templateName hs markups splices = do
+preview templateName hs markups = do
   pb <- getPostBuild
   tName <- pinButton templateName
-  let previewData   = (,,,) <$> tName <*> hs <*> markups <*> splices
-      runRender (_, Left t, _, _) = return $ Left (T.unlines t)
-      runRender (tName, Right s, ms, spls) = do
+  let previewData   = (,,) <$> tName <*> hs <*> markups
+      runRender (_, Left t, _) = return $ Left (T.unlines t)
+      runRender (tName, Right s, ms) = do
         r <- HI.renderTemplate s (T.encodeUtf8 tName)
         return $ maybe
           (Left $ if M.null (M.filter ((== tName) . _mcName) ms)
@@ -81,19 +80,20 @@ heistState
   => H.HeistConfig IO
   -- -> Dynamic t (M.Map Int MarkupCode)
   -> Dynamic t [(T.Text, H.DocumentFile)]
+  -> Dynamic t (H.Splices (HI.Splice IO))
   -> m (Dynamic t (Either [T.Text] (H.HeistState IO)))
-heistState cfg docs = do
+heistState cfg docs splices = do
   pb <- getPostBuild
-  let cfgUpdates = leftmost [tagPromptlyDyn docs pb, updated docs]
+  let docsAndSplices = (,) <$> docs <*> splices
+  let cfgUpdates = leftmost [tagPromptlyDyn docsAndSplices pb, updated docsAndSplices]
       bimap f g  = either (Left . f) (Right . g)
-  dHs <- performEvent $ ffor cfgUpdates $ \ms ->
-    let -- docs = snd $ parseMarkups ms
-        addDocs s = foldr (\(tName,tDoc) hs ->
+  dHs <- performEvent $ ffor cfgUpdates $ \(ms, spls) ->
+    let addDocs s = foldr (\(tName,tDoc) hs ->
                              HI.addTemplate (T.encodeUtf8 tName)
                                             (X.docContent $ H.dfDoc tDoc)
                                             (H.dfFile tDoc) hs
-                          ) s ms -- docs
-    in  liftIO $ fmap addDocs <$> (H.initHeist cfg)
+                          ) s ms
+    in  liftIO $ fmap addDocs <$> (H.initHeist (cfg & H.hcInterpretedSplices .~ spls))
   holdDyn (Left ["Not initialized"]) (bimap (fmap T.pack) id <$> dHs)
 
 

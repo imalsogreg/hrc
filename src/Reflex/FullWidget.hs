@@ -42,8 +42,7 @@ heistWidget (HeistWidgetConfig m0 dM ) = do
 
     let parsedDocs :: Dynamic t ([String], [(T.Text, H.DocumentFile)]) = parseMarkups <$> allMarkup
 
-    hState <- heistState (H.emptyHeistConfig & H.hcInterpretedSplices .~ H.defaultInterpretedSplices
-                                             & H.hcNamespace .~ "") (snd <$> parsedDocs)
+
 
     let spliceHoles = collectHoles spliceHoleParser . (fmap (X.docContent . H.dfDoc . snd) . snd) <$> parsedDocs
 
@@ -51,6 +50,11 @@ heistWidget (HeistWidgetConfig m0 dM ) = do
 
     splices <- spliceWidgets spliceHoles
 
-    preview previewName hState allMarkup splices
+    hState <- heistState (H.emptyHeistConfig
+                          & H.hcInterpretedSplices .~ H.defaultInterpretedSplices
+                          & H.hcNamespace .~ ""
+                         ) (snd <$> parsedDocs) splices
+
+    preview previewName hState allMarkup
 
     return HeistWidget
