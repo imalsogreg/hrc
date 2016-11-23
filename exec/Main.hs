@@ -277,11 +277,11 @@ testTemplate1 :: BS.ByteString
 testTemplate1 = [s|
 <h1>A test template</h1>
 
-Hi <taktname splicetype="text"/>
+Hi <splice:name splicetype="text"/>
 
 <apply template="block">
 Your next <apply template="fancydrink"/>
-earns <taktNumStars splicetype="double"/> Stars!
+earns <splice:numStars splicetype="double"/> Stars!
 </apply>
 
 <apply  template="block">
@@ -309,7 +309,7 @@ testTemplate2 :: BS.ByteString
 testTemplate2 = [s|
 <span class="drink">
   <em>
-    <taktdrink splicetype="drink-dropdown"/>
+    <splice:drink splicetype="dropdown" options="Mocha,moch;Latte,latt;Espresso,espr"/>
   </em>
 </span>
 
