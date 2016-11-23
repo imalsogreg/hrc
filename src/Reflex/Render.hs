@@ -85,7 +85,8 @@ heistState
 heistState cfg docs splices = do
   pb <- getPostBuild
   let docsAndSplices = (,) <$> docs <*> splices
-  let cfgUpdates = leftmost [tagPromptlyDyn docsAndSplices pb, updated docsAndSplices]
+  let cfgUpdates = leftmost [tagPromptlyDyn docsAndSplices pb
+                            , updated docsAndSplices]
       bimap f g  = either (Left . f) (Right . g)
   dHs <- performEvent $ ffor cfgUpdates $ \(ms, spls) ->
     let addDocs s = foldr (\(tName,tDoc) hs ->
@@ -93,7 +94,9 @@ heistState cfg docs splices = do
                                             (X.docContent $ H.dfDoc tDoc)
                                             (H.dfFile tDoc) hs
                           ) s ms
-    in  liftIO $ fmap addDocs <$> (H.initHeist (cfg & H.hcInterpretedSplices .~ spls))
+    in  liftIO $ fmap addDocs
+                 <$> H.initHeist (cfg & H.hcInterpretedSplices %~ (<> spls))
+
   holdDyn (Left ["Not initialized"]) (bimap (fmap T.pack) id <$> dHs)
 
 
