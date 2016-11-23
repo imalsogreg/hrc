@@ -32,29 +32,37 @@ data HeistWidgetConfig t = HeistWidgetConfig
 
 data HeistWidget = HeistWidget
 
-heistWidget :: forall t m.MonadWidget t m => HeistWidgetConfig t -> m (HeistWidget)
+-------------------------------------------------------------------------------
+heistWidget
+  :: forall t m.MonadWidget t m
+  => HeistWidgetConfig t
+  -> m (HeistWidget)
 heistWidget (HeistWidgetConfig m0 dM ) = do
 
-    -- Attach template listing to code editor
+    -- Attach template listing (`markupList`) to code editor (`markupEditor`)
     rec (MarkupList k allMarkup) <- markupList $ MarkupListConfig m0 mUpdates defDrawEntry
         mCode <- markupEditor (M.lookup <$> k <*> allMarkup)
         let mUpdates = attachWith (=:) (current k) (Just <$> mCode)
 
+    -- Parse markup files into (errors, named XML trees)
     let parsedDocs :: Dynamic t ([String], [(T.Text, H.DocumentFile)]) = parseMarkups <$> allMarkup
 
-
-
+    -- Search the XML trees for splice holes and resolve their types
     let spliceHoles = collectHoles spliceHoleParser . (fmap (X.docContent . H.dfDoc . snd) . snd) <$> parsedDocs
 
-        previewName = (maybe "" _mcName) <$> (M.lookup <$> k <*> allMarkup)
+    -- Template name of currently selected document
+    let previewName = (maybe "" _mcName) <$> (M.lookup <$> k <*> allMarkup)
 
+    -- Create widgets for users to plug spliceHoles with data
     splices <- spliceWidgets spliceHoles
 
+    -- Track the heistState for rendering
     hState <- heistState (H.emptyHeistConfig
                           & H.hcInterpretedSplices .~ H.defaultInterpretedSplices
                           & H.hcNamespace .~ ""
                          ) (snd <$> parsedDocs) splices
 
+    -- Draw the currently selected document
     preview previewName hState allMarkup
 
     return HeistWidget
