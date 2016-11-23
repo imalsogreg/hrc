@@ -7,8 +7,9 @@
 {-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE TupleSections         #-}
 
-module Reflex.Markup where
+module Reflex.Heist.Markup where
 
+-------------------------------------------------------------------------------
 import           Control.Lens          (makeLenses, (.~), (^.))
 import           Data.Bool             (bool)
 import qualified Data.ByteString.Char8 as BS
@@ -38,9 +39,12 @@ makeLenses ''MarkupCode
 
 -------------------------------------------------------------------------------
 data MarkupListConfig t m = MarkupListConfig
-    { _markupListConfig_initialTemplates :: M.Map Int MarkupCode
-    , _markupListConfig_modifyTemplates  :: Event t (M.Map Int (Maybe MarkupCode))
-    , _markupListConfig_drawEntry        :: Int -> Dynamic t MarkupCode -> m ()
+    { _markupListConfig_initialTemplates
+      :: M.Map Int MarkupCode
+    , _markupListConfig_modifyTemplates
+      :: Event t (M.Map Int (Maybe MarkupCode))
+    , _markupListConfig_drawEntry
+      :: Int -> Dynamic t MarkupCode -> m ()
     }
 
 
@@ -73,7 +77,6 @@ markupList (MarkupListConfig t0 dT mkChild) = do
 markupEditor
     :: MonadWidget t m
     => Dynamic t (Maybe MarkupCode)
---    -> m (Event t (T.Text, Either T.Text H.DocumentFile))
     -> m (Event t MarkupCode)
 markupEditor code = do
     pb <- getPostBuild
@@ -87,8 +90,11 @@ markupEditor code = do
     return $ attachWithMaybe (\m m' -> fmap (mcCode .~ m') m)
                              (current code) ups
 
+
+-------------------------------------------------------------------------------
 parseMarkups :: M.Map Int MarkupCode -> ([String], [(T.Text, H.DocumentFile)])
 parseMarkups = partitionEithers . M.elems . M.map ingestMarkupCode
+
 
 -------------------------------------------------------------------------------
 -- Load a TemplateCode as a Heist document
@@ -106,11 +112,17 @@ ingestMarkupCode mc = (tName,) <$> bsGetDoc fName html
 markupListAtr :: Bool -> M.Map T.Text T.Text
 markupListAtr sel =
     let brd = bool "" " border-left: 3px solid black;" sel
-    in  "style" =: ("display:flex; align-items:center; background-color: rgba(0,0,0,0.1); padding: 10px;" <> brd)
+    in  "style" =: ("display:flex; align-items:center;"
+                    <> " background-color: rgba(0,0,0,0.1); padding: 10px;"
+                    <> brd)
 
+
+-------------------------------------------------------------------------------
 codeareaAttrs :: M.Map T.Text T.Text
 codeareaAttrs = "style" =: "width:400px; height:600px;"
 
+
+-------------------------------------------------------------------------------
 -- | Parse a bytestring into XML or HTML nodes
 bsGetDocWith
     :: ParserFun
@@ -123,13 +135,19 @@ bsGetDocWith parser fUrl bs =
     (parser errName bs)
   where errName = maybe "[unknown filename]" T.unpack fUrl
 
+
+-------------------------------------------------------------------------------
 -- | Parse a bytestring into HTML
 bsGetDoc :: Maybe T.Text -> BS.ByteString -> Either String H.DocumentFile
 bsGetDoc = bsGetDocWith X.parseHTML
 
+
+-------------------------------------------------------------------------------
 -- | Parse a bytestring into XML
 bsGetXML :: Maybe T.Text -> BS.ByteString -> Either String H.DocumentFile
 bsGetXML = bsGetDocWith X.parseXML
 
+
+-------------------------------------------------------------------------------
 type ParserFun = String -> BS.ByteString -> Either String X.Document
 

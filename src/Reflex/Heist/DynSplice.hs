@@ -8,7 +8,7 @@
 {-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE TupleSections         #-}
 
-module Reflex.DynSplice where
+module Reflex.Heist.DynSplice where
 
 -------------------------------------------------------------------------------
 import           Control.Applicative    (Alternative, liftA2, (<|>))

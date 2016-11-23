@@ -3,12 +3,12 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE RankNTypes            #-}
-{-# LANGUAGE RecursiveDo            #-}
+{-# LANGUAGE RecursiveDo           #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE TupleSections         #-}
 
-module Reflex.Render where
+module Reflex.Heist.Render where
 
 -------------------------------------------------------------------------------
 import           Control.Applicative    (Alternative, liftA2, (<|>))
@@ -32,7 +32,8 @@ import qualified Heist.Interpreted      as HI
 import           Reflex.Dom
 import           Text.Read              (readMaybe)
 import qualified Text.XmlHtml           as X
-import           Reflex.Markup
+-------------------------------------------------------------------------------
+import           Reflex.Heist.Markup
 
 -------------------------------------------------------------------------------
 preview
@@ -58,6 +59,7 @@ preview templateName hs markups = do
     (leftmost [tag (current previewData) pb, updated previewData])
   lastOkRender <- holdDyn "No render" (fmapMaybe id $ hush <$> renderUpdates)
   elDynAttr "iframe" (("srcdoc" =:) <$> lastOkRender ) blank
+
 
 -------------------------------------------------------------------------------
 -- Lock out changes to a dynamic when it's 'pinned'

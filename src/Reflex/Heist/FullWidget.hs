@@ -7,8 +7,9 @@
 {-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE TupleSections         #-}
 
-module Reflex.FullWidget where
+module Reflex.Heist.FullWidget where
 
+-------------------------------------------------------------------------------
 import           Control.Lens          (makeLenses, (.~), (^.))
 import           Data.Bool             (bool)
 import qualified Data.ByteString.Char8 as BS
@@ -20,17 +21,21 @@ import qualified Heist                 as H
 import qualified Heist.Interpreted     as HI
 import           Reflex.Dom
 import qualified Text.XmlHtml          as X
+-------------------------------------------------------------------------------
+import Reflex.Heist.Markup
+import Reflex.Heist.DynSplice
+import Reflex.Heist.Render
 
-import Reflex.Markup
-import Reflex.DynSplice
-import Reflex.Render
-
+-------------------------------------------------------------------------------
 data HeistWidgetConfig t = HeistWidgetConfig
     { _heistWidgetConfig_initialMarkup :: M.Map Int MarkupCode
     , _heistWidgetConfig_modifyMarkup :: Event t (M.Map Int (Maybe MarkupCode))
     }
 
+
+-------------------------------------------------------------------------------
 data HeistWidget = HeistWidget
+
 
 -------------------------------------------------------------------------------
 heistWidget
