@@ -59,12 +59,17 @@ preview templateName hs markups = do
   lastOkRender <- holdDyn "No render" (fmapMaybe id $ hush <$> renderUpdates)
   elDynAttr "iframe" (("srcdoc" =:) <$> lastOkRender ) blank
 
+-------------------------------------------------------------------------------
+-- Lock out changes to a dynamic when it's 'pinned'
 pinButton :: MonadWidget t m => Dynamic t T.Text -> m (Dynamic t T.Text)
 pinButton t = do
   pb <- getPostBuild
   rec pinning :: Dynamic t Bool <- toggle False (domEvent Click pinDiv)
-      pinningT <- holdDyn "" (leftmost [ tag (current t) pb
-                                       , gate (current pinning) (updated t)])
+      let pinUpdates = leftmost [gate (not <$> current pinning) (updated t)
+                                ,tag (current t) (domEvent Click pinDiv)
+                                ,tag (current t) pb
+                                ]
+      pinningT <- holdDyn "" pinUpdates
       pinDiv  <- fmap fst $ elDynAttr' "div" (pinAttrs <$> pinning) $
         dynText retT
       let retT = join $ bool t pinningT <$> pinning
