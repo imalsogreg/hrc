@@ -3,13 +3,13 @@
 
 name:                hrc
 version:             0.1.0.0
--- synopsis:            
--- description:         
+synopsis:            Reflexified heist templating with interactive splices
+description:         hrc is a Reflex and Heist based content management system
 license:             BSD3
 license-file:        LICENSE
 author:              Greg Hale
 maintainer:          imalsogreg@gmail.com
--- copyright:           
+copyright:           2016 Takt Inc.
 category:            Web
 build-type:          Simple
 extra-source-files:  ChangeLog.md
@@ -22,16 +22,17 @@ library
                      , Reflex.Heist.Render
   -- other-modules:       
   -- other-extensions:    
-  build-depends:       base >=4.8 && <4.10
-                     , binary
-                     , heist >= 1.0
-                     , lens
-                     , reflex-dom
-                     , map-syntax
-                     , bytestring
-                     , text
-                     , containers
-                     , xmlhtml
+  build-depends:       base       >=4.8   && <4.10
+                     , binary     >= 0.8  && < 0.9
+                     , heist      >= 1.0  && < 1.1
+                     , lens       >= 4.14 && < 4.15
+                     , reflex     >= 0.5  && < 0.6
+                     , reflex-dom >= 0.4  && < 0.5
+                     , map-syntax >= 0.2  && < 0.3
+                     , bytestring >= 0.10 && < 0.11
+                     , text       >= 1.2  && < 1.3
+                     , containers >= 0.5  && < 0.6
+                     , xmlhtml    >= 0.2  && < 0.3
   hs-source-dirs:      src
   default-language:    Haskell2010
 
