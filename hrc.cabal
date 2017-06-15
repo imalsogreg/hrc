@@ -25,7 +25,7 @@ library
   build-depends:       base       >= 4.8  && <4.10
                      , binary     >= 0.8  && < 0.9
                      , heist      >= 1.0  && < 1.1
-                     , lens       >= 4.14 && < 4.15
+                     , lens       >= 4.14 && < 4.16
                      , reflex     >= 0.5  && < 0.6
                      , reflex-dom >= 0.4  && < 0.5
                      , map-syntax >= 0.2  && < 0.3
@@ -46,7 +46,6 @@ executable test
                , containers
                , binary
                , reflex-dom
-               , reflex-dom-contrib
                , transformers
                , map-syntax
                , string-qq

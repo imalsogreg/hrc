@@ -32,13 +32,11 @@ import qualified Data.Text.Encoding                     as T
 import           Data.Tuple                             (swap)
 import qualified Heist                                  as H
 import qualified Heist.Interpreted                      as HI
-import           Reflex.Dom
-import qualified Reflex.Dom.Contrib.Widgets.EditInPlace as EIP
+import           Reflex.Dom                             hiding (run)
 import           Text.Read                              (readMaybe)
 import qualified Text.XmlHtml                           as X
 -------------------------------------------------------------------------------
 import qualified Reflex.Heist.FullWidget                as FW
--- import           Reflex.Heist
 import           Reflex.Heist.Markup                    (MarkupCode(..))
 
 
@@ -60,7 +58,7 @@ templates1 :: M.Map Int MarkupCode
 templates1 =
        1 =: MarkupCode "block" "src"  (T.decodeUtf8 testBase)
     <> 2 =: MarkupCode "test1" "src" (T.decodeUtf8 testTemplate1)
-    <> 3 =: MarkupCode "fancydrink" "src" (T.decodeUtf8 testTemplate2)
+    <> 3 =: MarkupCode "fancy" "src" (T.decodeUtf8 testTemplate2)
 
 templates2 :: M.Map Int MarkupCode
 templates2 = 1 =: MarkupCode "test" "src" "<h1>Hi</h1>"
@@ -115,9 +113,9 @@ Donec id risus vitae dolor tristique imperdiet nec nec urna.</p>
 
 testTemplate2 :: BS.ByteString
 testTemplate2 = [s|
-<span class="drink">
+<span class="aspan">
   <em>
-    <splice:drink splicetype="dropdown" options="Mocha,moch;Latte,latt;Espresso,espr"/>
+    <splice:thing splicetype="dropdown" options="ThingA,thinga;ThingB,thingb;ThingC,thingc"/>
   </em>
 </span>
 
